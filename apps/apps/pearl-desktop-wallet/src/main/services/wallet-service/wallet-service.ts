@@ -2,6 +2,7 @@ import { RpcClient, RpcConfig } from '../rpc-client.ts';
 import { formatAndSortTransactions, formatTransaction, sortNewestFirst } from './transaction-formatter.ts';
 import { WalletRpcMethods } from './wallet-rpc-methods.ts';
 import { WalletApi } from '../../../types/app-bridge.ts';
+import { BlockbookClient } from '../../clients/blockbook-client.ts';
 import { Transaction } from '../../../types/transaction.ts';
 
 const RECENT_PAGE_SIZE = 20;
@@ -50,6 +51,10 @@ class WalletService extends WalletRpcMethods implements WalletApi {
       shownMined += rows.filter(tx => tx.blockhash).length;
     }
     return sortNewestFirst(shown).slice(0, count);
+  }
+
+  async getTransactionInfo(txid: string) {
+    return await BlockbookClient.getTransactionInfo(txid);
   }
 }
 
