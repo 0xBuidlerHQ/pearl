@@ -1,8 +1,10 @@
-import { ipcMain } from 'electron';
-import { ManagerService } from '../services/manager-service';
-import { BlockbookClient } from '../clients/blockbook-client';
-import { broadcastPearlTx, fetchPrlBalanceGrains, fetchPrlUtxos } from '../services/pearl-rpc';
-import { loadMultisigState, saveMultisigState } from '../services/multisig-store';
+import {ipcMain} from 'electron';
+import {ManagerService} from '../services/manager-service';
+import {BlockbookClient} from '../clients/blockbook-client';
+import {broadcastPearlTx, fetchPrlBalanceGrains, fetchPrlUtxos} from '../services/pearl-rpc';
+import {loadMultisigState, saveMultisigState} from '../services/multisig-store';
+import {RpcError} from '../services/rpc-client';
+import type {WalletSendResult} from '../../types/app-bridge';
 
 function registerWalletIpc(ms: ManagerService) {
   ipcMain.handle('wallet-unlock', async (_event, passphrase: string, timeout: number = 60) => {
@@ -18,8 +20,23 @@ function registerWalletIpc(ms: ManagerService) {
     await ms.ensureWalletService().changeWalletPassphrase(currentPassword, newPassword);
     await ms.rotateCurrentWalletSeedPassword(currentPassword, newPassword);
   });
-  ipcMain.handle('wallet-send-from-default-account', (_event, toAddress: string, amount: number, feeRate: number) =>
-    ms.ensureWalletService().sendFromDefaultAccount(toAddress, amount, feeRate)
+  ipcMain.handle(
+    'wallet-send-from-default-account',
+    async (_event, toAddress: string, amount: number, feeRate: number): Promise<WalletSendResult> => {
+      try {
+        const txid = await ms.ensureWalletService().sendFromDefaultAccount(toAddress, amount, feeRate);
+        return {ok: true, txid};
+      } catch (error) {
+        // Electron serializes thrown errors as message text, so send the RPC code as plain data.
+        return {
+          ok: false,
+          error: {
+            code: error instanceof RpcError ? error.code : undefined,
+            message: error instanceof Error ? error.message : 'Failed to send transaction',
+          },
+        };
+      }
+    }
   );
   ipcMain.handle('wallet-remove-transaction', (_event, txid: string) =>
     ms.ensureWalletService().removeTransaction(txid)
@@ -27,9 +44,7 @@ function registerWalletIpc(ms: ManagerService) {
   ipcMain.handle('wallet-rebroadcast-transaction', (_event, txid: string) =>
     ms.ensureWalletService().rebroadcastTransaction(txid)
   );
-  ipcMain.handle('wallet-list-all-transactions', _event =>
-    ms.ensureWalletService().listAllTransactions()
-  );
+  ipcMain.handle('wallet-list-all-transactions', _event => ms.ensureWalletService().listAllTransactions());
   ipcMain.handle('wallet-list-transactions', (_event, count: number = 10, from: number = 0) =>
     ms.ensureWalletService().listTransactions(count, from)
   );
@@ -49,7 +64,7 @@ function registerWalletIpc(ms: ManagerService) {
   ipcMain.handle('wallet-get-vault-utxos', async (_event, address: string) => {
     const result = await fetchPrlUtxos(address);
     return {
-      utxos: result.utxos.map((u) => ({
+      utxos: result.utxos.map(u => ({
         txid: u.txid,
         vout: u.vout,
         valueGrains: u.valueGrains.toString(),
@@ -69,11 +84,9 @@ function registerWalletIpc(ms: ManagerService) {
     ms.ensureWalletService().validateAddress(address)
   );
   ipcMain.handle('wallet-get-new-address', _event => ms.ensureWalletService().getNewAddress());
-  ipcMain.handle('wallet-estimate-fee', (_event, numBlocks: number) =>
-    BlockbookClient.estimateFee(numBlocks)
-  );
+  ipcMain.handle('wallet-estimate-fee', (_event, numBlocks: number) => BlockbookClient.estimateFee(numBlocks));
   ipcMain.handle('wallet-get-multisig-state', () => loadMultisigState());
   ipcMain.handle('wallet-save-multisig-state', (_event, state) => saveMultisigState(state));
 }
 
-export { registerWalletIpc };
+export {registerWalletIpc};

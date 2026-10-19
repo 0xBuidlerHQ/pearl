@@ -4,10 +4,31 @@ This document explains the multisig branch of the Pearl desktop wallet in a revi
 
 It is written for two use cases:
 
-1. Reviewers who want to inspect every file changed by `feature/multisig` relative to `master`.
+1. Reviewers who want to inspect every file changed by `multisig-v3` relative to `pearl-wallet-v3.0.0`.
 2. Developers who want the multisig flow from A to Z without jumping across the codebase.
 
-The branch keeps multisig entirely local to the desktop wallet. There is no separate remote multisig backend. The wallet stores vault state, pending PSBTs, and sent activity locally, then syncs them against the Pearl chain and Blockbook where needed.
+The branch keeps multisig entirely local to the desktop wallet. There is no separate remote multisig backend. The wallet
+stores vault state, pending PSBTs, and sent activity locally, then syncs them against the Pearl chain and Blockbook
+where needed.
+
+## Wallet v3 compatibility
+
+`multisig-v3` integrates the official `pearl-wallet-v3.0.0` release (commit `837c69c5`) with the existing multisig
+feature. It includes the bundled Pearl v1.5.0 security fixes and the v3 send/rebroadcast behavior. The `multisig-v2`
+branch preserves the earlier wallet v2 implementation.
+
+Normal wallet sends return a structured `WalletSendResult` across IPC so numeric RPC errors survive Electron
+serialization. Only RPC code `-9` permits a fresh send retry; other failures retain the conservative pending-payment
+behavior from v3. Multisig key derivation, wallet seed unlock/lock, password rotation, vault state, and PSBT flows
+remain available through the same bridge.
+
+Build the bundled `oyster` daemon from this branch when packaging: it includes the custom `derivemultisigkey` RPC
+required by multisig. An unmodified official v3 daemon does not include that extension. Existing vault descriptors,
+derivation paths, and `multisig-state.json` retain their formats.
+
+Run `pnpm --filter @pearl/pearl-desktop-wallet test` from `apps` to build the wallet and run the bridge regressions. The
+desktop single-instance test requires a display and an installed Electron binary. Go wallet tests require building
+`xmss/libxmss.a` with `make -C xmss lib` and using `go test -tags xmss`.
 
 ## Architecture Map
 
@@ -40,64 +61,64 @@ The multisig feature is split into clean layers:
 
 ### Main Process
 
-| File | Change |
-| --- | --- |
-| `apps/apps/pearl-desktop-wallet/package.json` | Added multisig crypto/runtime dependencies: `@scure/bip32`, `@scure/bip39`, `@scure/btc-signer`, `@noble/curves`, `@noble/hashes`, `vite-plugin-top-level-await`, and `vite-plugin-wasm`. |
-| `src/main/clients/blockbook-client.ts` | Added transaction-info lookup used for confirmations and broadcast monitoring. |
-| `src/main/ipc/register-wallet-ipc.ts` | Added IPC handlers for multisig key derivation, vault balance, vault UTXOs, tx info, broadcast, and wallet lock/unlock. |
-| `src/main/services/manager-service.ts` | Added wallet lifecycle handling needed by multisig: stop/start wallet process, select wallet, lock wallet, force-lock wallet, and seed persistence. |
-| `src/main/services/pearl-rpc.ts` | Added the Pearl RPC client with endpoint pooling, raw transaction broadcast, balance walking, and UTXO scanning. |
-| `src/main/services/wallet-seed-store.ts` | Added storage for the active wallet seed/session context. |
-| `src/main/services/wallet-service/wallet-rpc-methods.ts` | Added wallet RPC wrappers used by multisig, including `deriveMultisigKey()` and wallet lock/unlock helpers. |
-| `src/main/services/wallet-service/wallet-service.ts` | Added Blockbook-backed transaction info lookup and kept transaction sorting/filtering behavior. |
+| File                                                     | Change                                                                                                                                                                                    |
+| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/apps/pearl-desktop-wallet/package.json`            | Added multisig crypto/runtime dependencies: `@scure/bip32`, `@scure/bip39`, `@scure/btc-signer`, `@noble/curves`, `@noble/hashes`, `vite-plugin-top-level-await`, and `vite-plugin-wasm`. |
+| `src/main/clients/blockbook-client.ts`                   | Added transaction-info lookup used for confirmations and broadcast monitoring.                                                                                                            |
+| `src/main/ipc/register-wallet-ipc.ts`                    | Added IPC handlers for multisig key derivation, vault balance, vault UTXOs, tx info, broadcast, and wallet lock/unlock.                                                                   |
+| `src/main/services/manager-service.ts`                   | Added wallet lifecycle handling needed by multisig: stop/start wallet process, select wallet, lock wallet, force-lock wallet, and seed persistence.                                       |
+| `src/main/services/pearl-rpc.ts`                         | Added the Pearl RPC client with endpoint pooling, raw transaction broadcast, balance walking, and UTXO scanning.                                                                          |
+| `src/main/services/wallet-seed-store.ts`                 | Added storage for the active wallet seed/session context.                                                                                                                                 |
+| `src/main/services/wallet-service/wallet-rpc-methods.ts` | Added wallet RPC wrappers used by multisig, including `deriveMultisigKey()` and wallet lock/unlock helpers.                                                                               |
+| `src/main/services/wallet-service/wallet-service.ts`     | Added Blockbook-backed transaction info lookup and kept transaction sorting/filtering behavior.                                                                                           |
 
 ### Bridge And Types
 
-| File | Change |
-| --- | --- |
-| `src/preload/index.ts` | Exposed the new wallet and multisig APIs to the renderer bridge. |
+| File                      | Change                                                                               |
+| ------------------------- | ------------------------------------------------------------------------------------ |
+| `src/preload/index.ts`    | Exposed the new wallet and multisig APIs to the renderer bridge.                     |
 | `src/types/app-bridge.ts` | Updated the TypeScript definition of the bridge to include the new multisig methods. |
 
 ### Shared Chain And Crypto Primitives
 
-| File | Change |
-| --- | --- |
-| `src/renderer/src/chains/pearl/address.ts` | Added Pearl taproot address encode/decode helpers for the `prl` network format. |
-| `src/renderer/src/chains/pearl/multisig.ts` | Added Taproot multisig descriptor construction, vault address derivation, and script generation. |
-| `src/renderer/src/chains/pearl/network.ts` | Added Pearl network parameters and explorer URL helpers. |
-| `src/renderer/src/crypto/base64.ts` | Added base64 helpers for PSBT import/export. |
-| `src/renderer/src/crypto/bip32.ts` | Added BIP32 derivation helpers for signer key derivation. |
-| `src/renderer/src/crypto/descriptor.ts` | Added cosigner descriptor encode/decode helpers. |
-| `src/renderer/src/lib/pearl-multisig-path.ts` | Added the canonical derivation path helper for Pearl multisig signer slots. |
+| File                                          | Change                                                                                           |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `src/renderer/src/chains/pearl/address.ts`    | Added Pearl taproot address encode/decode helpers for the `prl` network format.                  |
+| `src/renderer/src/chains/pearl/multisig.ts`   | Added Taproot multisig descriptor construction, vault address derivation, and script generation. |
+| `src/renderer/src/chains/pearl/network.ts`    | Added Pearl network parameters and explorer URL helpers.                                         |
+| `src/renderer/src/crypto/base64.ts`           | Added base64 helpers for PSBT import/export.                                                     |
+| `src/renderer/src/crypto/bip32.ts`            | Added BIP32 derivation helpers for signer key derivation.                                        |
+| `src/renderer/src/crypto/descriptor.ts`       | Added cosigner descriptor encode/decode helpers.                                                 |
+| `src/renderer/src/lib/pearl-multisig-path.ts` | Added the canonical derivation path helper for Pearl multisig signer slots.                      |
 
 ### Renderer Services
 
-| File | Change |
-| --- | --- |
-| `src/renderer/src/services/multisig.ts` | Added the core multisig engine: vault records, pending/sent state, PSBT import, PSBT validation, signing, broadcasting, txid prediction, on-chain sync, and active removal of broadcasted txs from pending. |
-| `src/renderer/src/services/pearl-rpc.ts` | Added renderer-side Pearl RPC wrappers that call the main-process bridge. |
-| `src/renderer/src/services/wallet-seed.ts` | Added session wallet seed tracking so the active wallet context survives page transitions. |
+| File                                       | Change                                                                                                                                                                                                      |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/renderer/src/services/multisig.ts`    | Added the core multisig engine: vault records, pending/sent state, PSBT import, PSBT validation, signing, broadcasting, txid prediction, on-chain sync, and active removal of broadcasted txs from pending. |
+| `src/renderer/src/services/pearl-rpc.ts`   | Added renderer-side Pearl RPC wrappers that call the main-process bridge.                                                                                                                                   |
+| `src/renderer/src/services/wallet-seed.ts` | Added session wallet seed tracking so the active wallet context survives page transitions.                                                                                                                  |
 
 ### Multisig Pages
 
-| File | Change |
-| --- | --- |
-| `src/renderer/src/pages/multisig/CreateMultisig.tsx` | Added the vault creation UI and cosigner import/validation flow. |
-| `src/renderer/src/pages/multisig/MultisigDashboard.tsx` | Added the vault dashboard with pending txs, sent activity, proposal import, descriptor export, and refresh behavior. |
-| `src/renderer/src/pages/multisig/MultisigRelaySign.tsx` | Added the proposal import/sign relay page. |
-| `src/renderer/src/pages/multisig/MultisigSend.tsx` | Added the compose-spend PSBT builder page. |
-| `src/renderer/src/pages/multisig/MultisigTx.tsx` | Added the detailed pending transaction page with signing, broadcasting, copy actions, txid display, and post-broadcast fallback. |
-| `src/renderer/src/pages/multisig/Page.tsx` | Added the multisig landing page that lists vaults and sent/pending summaries. |
-| `src/renderer/src/pages/multisig/components/header.tsx` | Added the shared multisig header component. |
-| `src/renderer/src/pages/multisig/helpers.ts` | Added shared formatting, clipboard, and descriptor parsing helpers. |
+| File                                                    | Change                                                                                                                           |
+| ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `src/renderer/src/pages/multisig/CreateMultisig.tsx`    | Added the vault creation UI and cosigner import/validation flow.                                                                 |
+| `src/renderer/src/pages/multisig/MultisigDashboard.tsx` | Added the vault dashboard with pending txs, sent activity, proposal import, descriptor export, and refresh behavior.             |
+| `src/renderer/src/pages/multisig/MultisigRelaySign.tsx` | Added the proposal import/sign relay page.                                                                                       |
+| `src/renderer/src/pages/multisig/MultisigSend.tsx`      | Added the compose-spend PSBT builder page.                                                                                       |
+| `src/renderer/src/pages/multisig/MultisigTx.tsx`        | Added the detailed pending transaction page with signing, broadcasting, copy actions, txid display, and post-broadcast fallback. |
+| `src/renderer/src/pages/multisig/Page.tsx`              | Added the multisig landing page that lists vaults and sent/pending summaries.                                                    |
+| `src/renderer/src/pages/multisig/components/header.tsx` | Added the shared multisig header component.                                                                                      |
+| `src/renderer/src/pages/multisig/helpers.ts`            | Added shared formatting, clipboard, and descriptor parsing helpers.                                                              |
 
 ### Existing Wallet Pages Updated For Multisig
 
-| File | Change |
-| --- | --- |
-| `src/renderer/src/pages/ImportAccount.tsx` | Updated account import to persist session seed state and unlock the wallet. |
-| `src/renderer/src/pages/WalletDashboard.tsx` | Updated refresh logic to avoid flicker and stale updates during silent refresh. |
-| `src/renderer/src/pages/WalletUnlock.tsx` | Added wallet selection, unlock retry handling, and session cleanup. |
+| File                                                    | Change                                                                          |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `src/renderer/src/pages/ImportAccount.tsx`              | Updated account import to persist session seed state and unlock the wallet.     |
+| `src/renderer/src/pages/WalletDashboard.tsx`            | Updated refresh logic to avoid flicker and stale updates during silent refresh. |
+| `src/renderer/src/pages/WalletUnlock.tsx`               | Added wallet selection, unlock retry handling, and session cleanup.             |
 | `src/renderer/src/pages/create-wallet/CreateWallet.tsx` | Cleared stale wallet data before creation and wrote the new session seed state. |
 
 ## End-to-End Multisig Flow
@@ -112,7 +133,8 @@ The multisig flow starts with a live wallet process.
 - `manager-service.ts` is the main process owner of wallet lifecycle.
 - `wallet-rpc-methods.ts` provides the underlying RPC methods for unlocking, locking, and deriving the multisig key.
 
-If the wallet has been idle long enough, the address manager can become locked again. In that case multisig derivation fails until the wallet is unlocked again.
+If the wallet has been idle long enough, the address manager can become locked again. In that case multisig derivation
+fails until the wallet is unlocked again.
 
 ### Step 2: Create a multisig vault
 
@@ -197,8 +219,8 @@ Signing happens in the multisig service and is surfaced through the relay-sign a
 - The signer list is updated.
 - The exported artifact is regenerated so the next cosigner can continue from the same PSBT.
 
-This branch explicitly fixed the bug where the code previously only inspected the first input.
-Now all inputs are checked.
+This branch explicitly fixed the bug where the code previously only inspected the first input. Now all inputs are
+checked.
 
 ### Step 7: Broadcast the final tx
 
@@ -259,7 +281,8 @@ The branch explicitly enforces the following rules:
 - Pending txs are removed when the chain shows they have already been broadcast.
 - Sent activity is preserved even if the pending entry disappears.
 
-The Taproot multisig descriptor uses an unspendable internal key, so there is no hidden master key built into the output.
+The Taproot multisig descriptor uses an unspendable internal key, so there is no hidden master key built into the
+output.
 
 ## Review Checklist
 
@@ -269,8 +292,10 @@ If you want to review the branch in a clean order, this is the best path:
 2. Read `src/renderer/src/services/multisig.ts` to understand state, validation, signing, and sync.
 3. Read `src/renderer/src/pages/multisig/MultisigSend.tsx` and `MultisigRelaySign.tsx` to see the two input paths.
 4. Read `src/renderer/src/pages/multisig/MultisigTx.tsx` to see the detailed pending tx UX.
-5. Read `src/main/ipc/register-wallet-ipc.ts` and `src/main/services/pearl-rpc.ts` to see the bridge to the wallet and chain.
-6. Read `src/renderer/src/pages/multisig/MultisigDashboard.tsx` and `src/renderer/src/pages/multisig/Page.tsx` for the resulting activity model.
+5. Read `src/main/ipc/register-wallet-ipc.ts` and `src/main/services/pearl-rpc.ts` to see the bridge to the wallet and
+   chain.
+6. Read `src/renderer/src/pages/multisig/MultisigDashboard.tsx` and `src/renderer/src/pages/multisig/Page.tsx` for the
+   resulting activity model.
 
 ## Summary
 

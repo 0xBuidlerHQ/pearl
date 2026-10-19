@@ -62,6 +62,7 @@ var Methods = []struct {
 	{"walletpassphrase", nil},
 	{"walletpassphrasechange", nil},
 	{"createnewaccount", nil},
+	{"derivemultisigkey", []interface{}{(*map[string]string)(nil)}},
 	{"exportwatchingwallet", returnsString},
 	{"getbestblock", []interface{}{(*btcjson.GetBestBlockResult)(nil)}},
 	{"getunconfirmedbalance", returnsNumber},

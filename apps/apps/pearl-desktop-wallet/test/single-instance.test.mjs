@@ -22,7 +22,6 @@ import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const electronBinary = require('electron');
 const appDir = join(dirname(fileURLToPath(import.meta.url)), '..');
 const mainBundle = join(appDir, 'out', 'main', 'index.js');
 
@@ -33,6 +32,7 @@ const STARTUP_TIMEOUT_MS = 20_000;
 const DUPLICATE_EXIT_TIMEOUT_MS = 15_000;
 
 function launchApp(configHome) {
+  const electronBinary = require('electron');
   // XDG_CONFIG_HOME redirects userData, so the test uses an isolated
   // single-instance lock and log file and never touches a real wallet profile.
   const child = spawn(

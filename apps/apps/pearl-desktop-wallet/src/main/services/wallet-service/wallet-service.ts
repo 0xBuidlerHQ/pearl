@@ -1,19 +1,19 @@
-import { RpcClient, RpcConfig } from '../rpc-client.ts';
-import { formatAndSortTransactions, formatTransaction, sortNewestFirst } from './transaction-formatter.ts';
-import { WalletRpcMethods } from './wallet-rpc-methods.ts';
-import { WalletApi } from '../../../types/app-bridge.ts';
-import { BlockbookClient } from '../../clients/blockbook-client.ts';
-import { Transaction } from '../../../types/transaction.ts';
+import {RpcClient, RpcConfig} from '../rpc-client.ts';
+import {formatAndSortTransactions, formatTransaction, sortNewestFirst} from './transaction-formatter.ts';
+import {WalletRpcMethods} from './wallet-rpc-methods.ts';
+import {BlockbookClient} from '../../clients/blockbook-client.ts';
+import {Transaction} from '../../../types/transaction.ts';
 
 const RECENT_PAGE_SIZE = 20;
 
 // THIS IS A HACK TO REMOVE THE SENT TRANSACTIONS WITH NO FEE AND TO HIDE ACTIVITIES THAT WAS CREATED
 // BY CURRENT WALLET (TO HIDE USED UTXOS THAT WASNT SPENT TOTALLY)
-function isShown({ type, fee }: Transaction) {
+function isShown({type, fee}: Transaction) {
   return !(type === 'sent' && fee === 0);
 }
 
-class WalletService extends WalletRpcMethods implements WalletApi {
+// The full WalletBridgeApi also includes methods owned by ManagerService and IPC.
+class WalletService extends WalletRpcMethods {
   constructor(config: RpcConfig) {
     super(
       new RpcClient({
@@ -58,4 +58,4 @@ class WalletService extends WalletRpcMethods implements WalletApi {
   }
 }
 
-export { WalletService };
+export {WalletService};

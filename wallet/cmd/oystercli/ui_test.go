@@ -11,10 +11,10 @@ import (
 	"os"
 	"strings"
 	"testing"
-	"time"
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/pearl-research-labs/pearl/node/btcjson"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -38,28 +38,6 @@ func TestOysterKeyMapEscBacksOut(t *testing.T) {
 	} {
 		assert.Contains(t, b.Help().Desc, "esc back", name)
 	}
-}
-
-func TestWithSpinnerFastPath(t *testing.T) {
-	// Completing before spinnerDelay must not spawn the spinner program
-	// (no TTY in tests, so spawning one would also fail the test).
-	sentinel := errors.New("boom")
-	start := time.Now()
-	err := withSpinner("working...", func() error { return sentinel })
-	require.ErrorIs(t, err, sentinel)
-	assert.Less(t, time.Since(start), spinnerDelay)
-
-	require.NoError(t, withSpinner("working...", func() error { return nil }))
-}
-
-func TestWithSpinnerAccessibleMode(t *testing.T) {
-	t.Setenv("ACCESSIBLE", "1")
-	sentinel := errors.New("slow failure")
-	err := withSpinner("working...", func() error {
-		time.Sleep(2 * spinnerDelay)
-		return sentinel
-	})
-	require.ErrorIs(t, err, sentinel)
 }
 
 func TestFriendlyError(t *testing.T) {
@@ -118,9 +96,13 @@ func scriptedTerminal(t *testing.T, input string) (printed func() string) {
 	out, outW, err := os.Pipe()
 	require.NoError(t, err)
 
-	oldIn, oldOut := os.Stdin, os.Stdout
+	oldIn, oldOut, oldWriter := os.Stdin, os.Stdout, lipgloss.Writer.Forward
 	os.Stdin, os.Stdout = in, outW
-	restore := func() { os.Stdin, os.Stdout = oldIn, oldOut }
+	lipgloss.Writer.Forward = outW
+	restore := func() {
+		os.Stdin, os.Stdout = oldIn, oldOut
+		lipgloss.Writer.Forward = oldWriter
+	}
 	t.Cleanup(restore)
 
 	return func() string {

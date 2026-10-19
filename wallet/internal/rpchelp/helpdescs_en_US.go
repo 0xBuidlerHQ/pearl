@@ -380,6 +380,15 @@ var helpDescsEnUS = map[string]string{
 		"The wallet must be unlocked for this request to succeed.",
 	"createnewaccount-account": "Name of the new account",
 
+	// DeriveMultisigKeyCmd help.
+	"derivemultisigkey--synopsis": "Derives a Pearl multisig cosigner key.\n" +
+		"The wallet must be unlocked. The result contains private key material for local signing.",
+	"derivemultisigkey-vaultaccount":    "Vault account index in the Pearl multisig derivation path",
+	"derivemultisigkey-keyindex":        "Cosigner key index in the vault account",
+	"derivemultisigkey--result0--desc":  "Cosigner key and derivation path",
+	"derivemultisigkey--result0--key":   "pubkeyHex, privKeyHex, or originPath",
+	"derivemultisigkey--result0--value": "Hex-encoded x-only public key, hex-encoded private key, or BIP32 derivation path",
+
 	// ExportWatchingWalletCmd help.
 	"exportwatchingwallet--synopsis": "Creates and returns a duplicate of the wallet database without any private keys to be used as a watching-only wallet.",
 	"exportwatchingwallet-account":   "Unused (must be unset or \"*\")",

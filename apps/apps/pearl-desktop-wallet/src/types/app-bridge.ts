@@ -100,6 +100,17 @@ interface WalletApi {
   }) => Promise<void>;
 }
 
+interface WalletSendError {
+  code?: number;
+  message: string;
+}
+
+type WalletSendResult = {ok: true; txid: string} | {ok: false; error: WalletSendError};
+
+type WalletBridgeApi = Omit<WalletApi, 'sendFromDefaultAccount'> & {
+  sendFromDefaultAccount: (...args: Parameters<WalletApi['sendFromDefaultAccount']>) => Promise<WalletSendResult>;
+};
+
 interface ManagerApi {
   getWalletsStats: () => { name?: string };
 
@@ -201,10 +212,25 @@ interface SyncApi {
 
 interface AppBridge {
   window: Ipc<WindowApi>;
-  wallet: Ipc<WalletApi>;
+  wallet: Ipc<WalletBridgeApi>;
   manager: Ipc<ManagerApi>;
   sync: Ipc<SyncApi>;
   update: UpdateApi;
 }
 
-export type { AppBridge, WindowApi, WalletApi, ManagerApi, SyncApi, SyncProgress, SyncPhase, UpdateApi, UpdateStatus, UpdateSeverity, Ipc };
+export type {
+  AppBridge,
+  WindowApi,
+  WalletApi,
+  WalletBridgeApi,
+  WalletSendError,
+  WalletSendResult,
+  ManagerApi,
+  SyncApi,
+  SyncProgress,
+  SyncPhase,
+  UpdateApi,
+  UpdateStatus,
+  UpdateSeverity,
+  Ipc,
+};
